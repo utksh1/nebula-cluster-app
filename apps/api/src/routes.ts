@@ -961,6 +961,66 @@ export function registerRoutes(app: any) {
         }
       });
 
+      // FIRE AND FORGET AUTO-DEPLOYMENT IF RENDER
+      if (provider.toLowerCase() === 'render' && credentials.apiKey) {
+        (async () => {
+          try {
+            console.log(`[Auto-Deploy] Triggered for newly linked Render account: ${accountName}`);
+            
+            // 1. Fetch the owner ID of the new account
+            const ownerRes = await require('axios').get('https://api.render.com/v1/users', {
+              headers: { Authorization: `Bearer ${credentials.apiKey}` }
+            });
+            const ownerId = ownerRes.data[0]?.user?.id;
+            
+            if (!ownerId) throw new Error('Could not fetch Render Owner ID');
+
+            // 2. Generate a unique worker token for this node
+            const crypto = require('crypto');
+            const rawToken = `nebula_worker_${crypto.randomBytes(16).toString('hex')}`;
+            const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+            await prisma.workerToken.create({
+              data: {
+                providerAccountId: account.id,
+                tokenHash,
+                createdBy: req.userId || 'system'
+              }
+            });
+
+            // 3. Command Render to spawn the Worker Node
+            console.log(`[Auto-Deploy] Spawning worker node on Render Owner: ${ownerId}`);
+            await require('axios').post('https://api.render.com/v1/services', {
+              type: 'web_service',
+              name: `nebula-worker-${Date.now().toString().slice(-4)}`,
+              ownerId: ownerId,
+              repo: 'https://github.com/utksh1/nebula-cluster-app',
+              branch: 'main',
+              serviceDetails: {
+                env: 'node',
+                plan: 'free',
+                region: region || 'oregon',
+                envVars: [
+                  { key: 'WORKER_TOKEN', value: rawToken },
+                  { key: 'API_BASE_URL', value: 'https://nebula-api-37xs.onrender.com' },
+                  { key: 'REDIS_URL', value: 'rediss://default:Yt6lBvjQ3mGvE7H7dYxU5sN7xZ9rG3v@singapore-redis.render.com:6379' }
+                ],
+                envSpecificDetails: {
+                  buildCommand: 'npm install && npm run build -w apps/worker',
+                  startCommand: 'npm run start -w apps/worker'
+                }
+              }
+            }, {
+              headers: { Authorization: `Bearer ${credentials.apiKey}` }
+            });
+
+            console.log(`[Auto-Deploy] Successfully dispatched worker to Render Cloud!`);
+          } catch (err: any) {
+            console.error('[Auto-Deploy] Failed to provision node:', err.response?.data || err.message);
+          }
+        })();
+      }
+
       return res.status(201).json(account);
     } catch (error: any) {
       return res.status(500).json({ error: error.message });
