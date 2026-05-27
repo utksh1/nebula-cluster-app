@@ -506,3 +506,13 @@ model CliToken {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
+
+model IncomingEmail {
+  id        String   @id @default(cuid())
+  to        String
+  from      String
+  subject   String?
+  bodyText  String?
+  bodyHtml  String?
+  createdAt DateTime @default(now())
+}

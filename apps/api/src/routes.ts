@@ -138,13 +138,67 @@ export function registerRoutes(app: any) {
   router.get('/projects', authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const projects = await prisma.project.findMany({
-        orderBy: { createdAt: 'desc' }
+        where: { createdBy: req.userId }
       });
       return res.json(projects);
     } catch (error: any) {
       return res.status(500).json({ error: error.message });
     }
   });
+
+  // ==========================================
+  // EMAIL WEBHOOKS (For Auto-Provisioning)
+  // ==========================================
+
+  router.post('/webhooks/email', async (req: Request, res: Response) => {
+    try {
+      // Different services (Cloudflare, ForwardEmail, SendGrid) send different JSON payloads.
+      // We will blindly grab from possible fields.
+      const payload = req.body;
+      const to = payload.to || payload.envelope?.to || (Array.isArray(payload.rcpt_to) ? payload.rcpt_to[0] : null) || '';
+      const from = payload.from || payload.envelope?.from || payload.sender || '';
+      const subject = payload.subject || payload.headers?.subject || '';
+      const bodyText = payload.text || payload.raw_text || payload.content || '';
+      const bodyHtml = payload.html || payload.raw_html || '';
+
+      if (!to) {
+        return res.status(400).json({ error: 'Missing recipient address (to)' });
+      }
+
+      await prisma.incomingEmail.create({
+        data: {
+          to: to.toLowerCase(),
+          from,
+          subject,
+          bodyText,
+          bodyHtml
+        }
+      });
+
+      return res.status(200).json({ success: true });
+    } catch (error: any) {
+      console.error('Webhook Error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/emails/:address', async (req: Request, res: Response) => {
+    try {
+      const { address } = req.params;
+      const emails = await prisma.incomingEmail.findMany({
+        where: { to: { contains: address.toLowerCase() } },
+        orderBy: { createdAt: 'desc' },
+        take: 1
+      });
+      return res.json(emails);
+    } catch (error: any) {
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ==========================================
+  // PROJECTS & WORKSPACES
+  // ==========================================
 
   router.post('/projects', authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
