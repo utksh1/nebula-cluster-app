@@ -1,0 +1,508 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         String    @default("DEVELOPER") // OWNER, ADMIN, DEVELOPER, VIEWER
+  status       String    @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  memberships OrganizationMember[]
+  cliTokens   CliToken[]
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  ownerUserId String
+  plan        String   @default("FREE") // FREE, PRO, ENTERPRISE
+  status      String   @default("ACTIVE") // ACTIVE, SUSPENDED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members             OrganizationMember[]
+  projects            Project[]
+  providers           ProviderAccount[]
+  workerPools         WorkerPool[]
+  workers             Worker[]
+  jobs                Job[]
+  jobLogs             JobLog[]
+  workerLogs          WorkerLog[]
+  queueMetrics        QueueMetric[]
+  secrets             Secret[]
+  apiKeys             ApiKey[]
+  webhooks            Webhook[]
+  auditLogs           AuditLog[]
+  pipelines           Pipeline[]
+  cliTokens           CliToken[]
+  providerDeployments ProviderDeployment[]
+  workerTokens        WorkerToken[]
+}
+
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           String   @default("DEVELOPER") // OWNER, ADMIN, DEVELOPER, VIEWER
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+}
+
+model Project {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  status         String   @default("ACTIVE") // ACTIVE, ARCHIVED
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  providerAccounts    ProviderAccount[]
+  workerPools         WorkerPool[]
+  workers             Worker[]
+  jobs                Job[]
+  jobLogs             JobLog[]
+  workerLogs          WorkerLog[]
+  queueMetrics        QueueMetric[]
+  secrets             Secret[]
+  apiKeys             ApiKey[]
+  webhooks            Webhook[]
+  auditLogs           AuditLog[]
+  pipelines           Pipeline[]
+  providerDeployments ProviderDeployment[]
+  workerTokens        WorkerToken[]
+
+  @@unique([organizationId, slug])
+}
+
+model ProviderAccount {
+  id                       String    @id @default(cuid())
+  organizationId           String
+  projectId                String?
+  provider                 String // render, railway, oracle, vps, local
+  accountName              String
+  credentialsEncrypted     String
+  region                   String?
+  status                   String    @default("CONNECTED") // CONNECTED, DISCONNECTED, AUTH_FAILED, RATE_LIMITED, DISABLED
+  limitsJson               String? // JSON string
+  createdBy                String
+  credentialsLastRotatedAt DateTime?
+  autoSetupEnabled         Boolean   @default(false)
+  defaultWorkerPoolId      String?
+  defaultWorkerCount       Int       @default(1)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  workerPool   WorkerPool?          @relation(fields: [defaultWorkerPoolId], references: [id], onDelete: SetNull)
+  workers      Worker[]
+  jobs         Job[]
+  secrets      Secret[]
+  deployments  ProviderDeployment[]
+  workerTokens WorkerToken[]
+}
+
+model WorkerPool {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  projectId           String
+  name                String
+  slug                String
+  description         String?
+  allowedJobTypesJson String // JSON array of strings
+  minTrustLevel       String   @default("semi_trusted") // trusted, semi_trusted, untrusted
+  limitsJson          String? // JSON string
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project       Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workers       Worker[]
+  jobs          Job[]
+  providerAccts ProviderAccount[]
+  workerTokens  WorkerToken[]
+
+  @@unique([projectId, slug])
+}
+
+model Worker {
+  id                String    @id @default(cuid())
+  organizationId    String
+  projectId         String
+  providerAccountId String?
+  workerPoolId      String?
+  nodeId            String    @unique
+  name              String
+  provider          String // render, railway, oracle, vps, local
+  region            String?
+  status            String    @default("OFFLINE") // ONLINE, OFFLINE, BUSY, ERROR, DRAINING, DISABLED
+  trustLevel        String    @default("semi_trusted") // trusted, semi_trusted, untrusted, ephemeral, local
+  capabilitiesJson  String // JSON string representation
+  tagsJson          String? // JSON string representation
+  cpuCores          Int       @default(1)
+  memoryMb          Int       @default(512)
+  maxConcurrentJobs Int       @default(1)
+  activeJobs        Int       @default(0)
+  workerVersion     String    @default("0.1.0")
+  protocolVersion   String    @default("v1")
+  lastHeartbeatAt   DateTime?
+  registeredAt      DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  providerAccount ProviderAccount? @relation(fields: [providerAccountId], references: [id], onDelete: SetNull)
+  workerPool      WorkerPool?      @relation(fields: [workerPoolId], references: [id], onDelete: SetNull)
+
+  heartbeats WorkerHeartbeat[]
+  jobLeases  JobLease[]
+  jobLogs    JobLog[]
+  workerLogs WorkerLog[]
+  metrics    WorkerMetric[]
+  attempts   JobAttempt[]
+  jobs       Job[]
+}
+
+model WorkerHeartbeat {
+  id             String   @id @default(cuid())
+  workerId       String
+  cpuUsage       Float
+  memoryUsage    Float
+  networkRx      Float    @default(0)
+  networkTx      Float    @default(0)
+  activeJobs     Int      @default(0)
+  uptimeSec      Int      @default(0)
+  rawMetricsJson String? // JSON string
+  receivedAt     DateTime @default(now())
+
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+}
+
+model Job {
+  id                String    @id @default(cuid())
+  organizationId    String
+  projectId         String
+  queueName         String    @default("default")
+  pipelineId        String?
+  parentJobId       String?
+  createdBy         String
+  type              String
+  status            String    @default("QUEUED") // QUEUED, ASSIGNED, RUNNING, COMPLETED, FAILED, RETRYING, CANCELLING, CANCELLED, TIMEOUT, STALE, DEAD_LETTER
+  priority          Int       @default(0)
+  payloadJson       String // JSON string payload
+  requirementsJson  String? // JSON string requirements
+  placementJson     String? // JSON string actual placement data
+  resultJson        String? // JSON string result
+  errorJson         String? // JSON string error details
+  attempts          Int       @default(0)
+  maxAttempts       Int       @default(3)
+  backoffStrategy   String    @default("exponential") // exponential, fixed
+  assignedWorkerId  String?
+  workerPoolId      String?
+  providerAccountId String?
+  idempotencyKey    String?
+  timeoutSec        Int       @default(300)
+  leaseExpiresAt    DateTime?
+  queuedAt          DateTime  @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+  failedAt          DateTime?
+  cancelledAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  worker          Worker?          @relation(fields: [assignedWorkerId], references: [id], onDelete: SetNull)
+  workerPool      WorkerPool?      @relation(fields: [workerPoolId], references: [id], onDelete: SetNull)
+  providerAccount ProviderAccount? @relation(fields: [providerAccountId], references: [id], onDelete: SetNull)
+  pipeline        Pipeline?        @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
+
+  jobAttempts JobAttempt[]
+  jobLeases   JobLease[]
+  jobLogs     JobLog[]
+
+  @@unique([projectId, idempotencyKey])
+}
+
+model JobAttempt {
+  id            String    @id @default(cuid())
+  jobId         String
+  workerId      String
+  attemptNumber Int
+  status        String // RUNNING, COMPLETED, FAILED
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  failedAt      DateTime?
+  errorJson     String? // JSON string
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+}
+
+model JobLease {
+  id         String   @id @default(cuid())
+  jobId      String
+  workerId   String
+  leaseToken String
+  status     String   @default("ACTIVE") // ACTIVE, EXPIRED, RELEASED, CANCELLED
+  expiresAt  DateTime
+  renewedAt  DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+}
+
+model JobLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String
+  jobId          String
+  workerId       String
+  level          String   @default("INFO") // DEBUG, INFO, WARNING, ERROR
+  message        String
+  metadataJson   String? // JSON string
+  timestamp      DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  job          Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker       Worker       @relation(fields: [workerId], references: [id], onDelete: Cascade)
+}
+
+model WorkerLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String
+  workerId       String
+  level          String   @default("INFO") // DEBUG, INFO, WARNING, ERROR
+  message        String
+  metadataJson   String? // JSON string
+  timestamp      DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  worker       Worker       @relation(fields: [workerId], references: [id], onDelete: Cascade)
+}
+
+model WorkerMetric {
+  id          String   @id @default(cuid())
+  workerId    String
+  cpuUsage    Float
+  memoryUsage Float
+  networkRx   Float    @default(0)
+  networkTx   Float    @default(0)
+  activeJobs  Int      @default(0)
+  uptimeSec   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+}
+
+model QueueMetric {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String
+  queueName      String
+  queuedJobs     Int      @default(0)
+  runningJobs    Int      @default(0)
+  completedJobs  Int      @default(0)
+  failedJobs     Int      @default(0)
+  retryingJobs   Int      @default(0)
+  queueLatencyMs Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Secret {
+  id                String    @id @default(cuid())
+  organizationId    String
+  projectId         String?
+  providerAccountId String?
+  name              String
+  scope             String    @default("project") // organization, project, provider_account, worker, job
+  valueEncrypted    String
+  availableToJson   String? // JSON array of strings
+  createdBy         String
+  rotatedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project         Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  providerAccount ProviderAccount? @relation(fields: [providerAccountId], references: [id], onDelete: SetNull)
+}
+
+model ApiKey {
+  id             String    @id @default(cuid())
+  organizationId String
+  projectId      String?
+  name           String
+  keyHash        String    @unique
+  scopesJson     String // JSON array of strings
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
+
+model Webhook {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String
+  url            String
+  eventsJson     String // JSON array of strings
+  secretHash     String
+  status         String   @default("ACTIVE") // ACTIVE, INACTIVE
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  deliveries WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id             String    @id @default(cuid())
+  webhookId      String
+  eventType      String
+  payloadJson    String // JSON payload representation
+  status         String // SUCCESS, FAILED
+  responseStatus Int?
+  responseBody   String?
+  attempts       Int       @default(1)
+  nextRetryAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String?
+  actorUserId    String?
+  action         String
+  targetType     String
+  targetId       String
+  metadataJson   String? // JSON string
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
+
+model Pipeline {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String
+  name           String
+  definitionJson String // JSON pipeline description
+  status         String   @default("ACTIVE") // ACTIVE, ARCHIVED
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  jobs         Job[]
+}
+
+model ProviderDeployment {
+  id                String   @id @default(cuid())
+  organizationId    String
+  projectId         String?
+  providerAccountId String
+  deploymentName    String?
+  workerImage       String?
+  workerCount       Int      @default(1)
+  expectedWorkers   Int      @default(1)
+  registeredWorkers Int      @default(0)
+  region            String?
+  cpu               String?
+  memory            String?
+  envVarsJson       String?
+  setupMode         String?
+  status            String   @default("PENDING")
+  errorMessage      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project         Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  providerAccount ProviderAccount @relation(fields: [providerAccountId], references: [id], onDelete: Cascade)
+}
+
+model WorkerToken {
+  id                String    @id @default(cuid())
+  organizationId    String
+  projectId         String?
+  providerAccountId String?
+  workerPoolId      String?
+  tokenHash         String
+  status            String    @default("ACTIVE")
+  maxUses           Int       @default(1)
+  useCount          Int       @default(0)
+  expiresAt         DateTime?
+  createdBy         String?
+  createdAt         DateTime  @default(now())
+  lastUsedAt        DateTime?
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project         Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  providerAccount ProviderAccount? @relation(fields: [providerAccountId], references: [id], onDelete: SetNull)
+  workerPool      WorkerPool?      @relation(fields: [workerPoolId], references: [id], onDelete: SetNull)
+}
+
+model CliToken {
+  id             String    @id @default(cuid())
+  userId         String
+  organizationId String
+  tokenHash      String
+  status         String    @default("ACTIVE")
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  lastUsedAt     DateTime?
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
