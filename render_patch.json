@@ -1,0 +1,8 @@
+{
+  "serviceDetails": {
+    "envSpecificDetails": {
+      "buildCommand": "npm install && npm run build -w apps/api",
+      "startCommand": "npm run db:migrate -w apps/api && npm run start -w apps/api"
+    }
+  }
+}

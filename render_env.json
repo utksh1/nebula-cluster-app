@@ -1,0 +1,6 @@
+[
+  { "key": "DATABASE_URL", "value": "postgresql://nebula_cluster_db_user:tKZsUbu1ilgHQEOAufnQYEVcQeITtm2n@dpg-d8bm7crdho2c73el3rkg-a/nebula_cluster_db" },
+  { "key": "REDIS_URL", "value": "rediss://red-d8bm8pkm0tmc73emct80:SqHhd7Wnt0OXeKhPpdrKsRIDohL3yRsK@singapore-keyvalue.render.com:6379" },
+  { "key": "JWT_SECRET", "value": "nebula_super_secret_key" },
+  { "key": "PORT", "value": "3001" }
+]

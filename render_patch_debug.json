@@ -1,0 +1,8 @@
+{
+  "serviceDetails": {
+    "envSpecificDetails": {
+      "buildCommand": "npm install && npm run build -w apps/api",
+      "startCommand": "cd apps/api && npm run db:migrate > migrate.log 2>&1 ; npx http-server -p 3001"
+    }
+  }
+}

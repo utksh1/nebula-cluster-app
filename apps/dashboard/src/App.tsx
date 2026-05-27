@@ -20,7 +20,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://nebula-api-37xs.onrender.com';
 
 interface Worker {
   id: string;
@@ -412,6 +412,23 @@ export default function App() {
       fetchProviderAccounts();
     } catch (err: any) {
       setProvMessage(`Error: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setProvSaving(false);
+    }
+  };
+
+  const handleAutoProvision = async () => {
+    setProvSaving(true);
+    setProvMessage('');
+    try {
+      const res = await axios.post('http://localhost:3002/api/provision', {});
+      setProvMessage(res.data.message || 'Provisioning started! Check your local screen.');
+    } catch (err: any) {
+      if (err.message === 'Network Error' || err.code === 'ERR_NETWORK') {
+         setProvMessage('Provisioner daemon is not running! Please run `npm run provisioner-daemon` in your local terminal first.');
+      } else {
+         setProvMessage(`Error: ${err.response?.data?.error || err.message}`);
+      }
     } finally {
       setProvSaving(false);
     }
@@ -972,6 +989,22 @@ export default function App() {
                   onClick={handleAutoLinkCli}
                 >
                   ⚡ Auto-Link Local Render CLI Config
+                </button>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '16px 0' }}>
+                  <hr style={{ flex: 1, border: 'none', borderTop: '1px dashed var(--border)' }} />
+                  <span style={{ fontSize: '9.5px', color: 'var(--text-3)', fontWeight: 600 }}>OR</span>
+                  <hr style={{ flex: 1, border: 'none', borderTop: '1px dashed var(--border)' }} />
+                </div>
+
+                <button 
+                  type="button"
+                  className="btn"
+                  disabled={provSaving}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'var(--primary)', color: 'white' }}
+                  onClick={handleAutoProvision}
+                >
+                  🚀 Launch Auto-Provisioner (Incognito)
                 </button>
 
                 {provMessage && (

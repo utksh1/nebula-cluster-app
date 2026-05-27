@@ -1,0 +1,22 @@
+{
+  "type": "web_service",
+  "name": "nebula-api",
+  "ownerId": "tea-d8blks6rnols73969a30",
+  "repo": "https://github.com/utksh1/nebula-cluster-app",
+  "branch": "main",
+  "serviceDetails": {
+    "env": "node",
+    "envVars": [
+      { "key": "DATABASE_URL", "value": "postgresql://nebula_cluster_db_user:tKZsUbu1ilgHQEOAufnQYEVcQeITtm2n@dpg-d8bm7crdho2c73el3rkg-a/nebula_cluster_db" },
+      { "key": "REDIS_URL", "value": "redis://red-d8bm8pkm0tmc73emct80:6379" },
+      { "key": "JWT_SECRET", "value": "nebula_super_secret_key" },
+      { "key": "PORT", "value": "3001" }
+    ],
+    "plan": "free",
+    "region": "singapore",
+    "envSpecificDetails": {
+      "buildCommand": "npm install && cd apps/api && npx prisma db push && cd ../.. && npm run build -w apps/api",
+      "startCommand": "npm run start -w apps/api"
+    }
+  }
+}

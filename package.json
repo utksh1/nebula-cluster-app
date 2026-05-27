@@ -12,6 +12,7 @@
     "dev:api": "npm run dev -w apps/api",
     "dev:dashboard": "npm run dev -w apps/dashboard",
     "dev:worker": "npm run dev -w apps/worker",
+    "provisioner-daemon": "npm run start -w apps/provisioner",
     "build": "npm run build --workspaces"
   },
   "devDependencies": {
